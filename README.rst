@@ -1,8 +1,8 @@
 DUMP: Encrypted Backups to a Remote Server
 ==========================================
 
-Dump is a simple command line utility to orchestrate backups. It is based on 
-duplicity, which is a powerful and flexible utility for managing encrypted 
+Dump is a simple command line utility to orchestrate backups. It is built on 
+Duplicity, which is a powerful and flexible utility for managing encrypted 
 backups, however it has a rather heavy user interface. With dump, you specify 
 all the details about your backups once in advance, and then use a very simple 
 command line interface for your day to day activities.
@@ -13,7 +13,7 @@ copy the dump script and modify each copy for a particular backup.
 
 Generally, you should dedicate a directory to your backups. That directory will 
 hold the dump executable and the archive directory. The archive directory 
-contains duplicity housekeeping files for the backup. You can place as many of 
+contains Duplicity housekeeping files for the backup. You can place as many of 
 the dump executables as you wish in that directory and they can be configured to 
 share the archive directory.
 
@@ -43,10 +43,12 @@ You can list the files that existed on a particular date using::
 
 Or, you can list the files that existed 3.5 days ago using::
 
-   ./dump --date -3D12h manifest
+   ./dump --date 3D12h manifest
 
-The interval string can be constructed using the characters s (seconds), 
-m (minutes), h (hours), D (days), W (weeks), M (months), or Y (years).
+The interval string passed as the date is constructed using an integer followed 
+by one of the following characters s (seconds), m (minutes), h (hours), 
+D (days), W (weeks), M (months), or Y (years). You can combine several to get 
+more resolution.
 
 
 Restore
@@ -75,7 +77,7 @@ You can clean up your remote repository using::
 
    ./dump cleanup
 
-This removes any unneeded files duplicity created files in the remote 
+This removes any unneeded files Duplicity created files in the remote 
 repository.  This is not normally necessary, however it can be helpful if 
 a previous session terminate abnormally.
 
@@ -84,15 +86,18 @@ than the given date are deleted::
 
    ./dump -d 1Y cleanup
 
+This can reduce the size of your remote repository. Of course after doing this 
+you may not be able to restore files that were deleted before the date you 
+specified.
 
 Trouble
 -------
 
-If duplicity is refusing to work for you, run using the verbose flags::
+If Duplicity is refusing to work for you, run using the verbose flags::
 
    ./dump -v -n backup full
 
-And carefully read the error messages. They should lead you to the problem.
+Then carefully read the error messages. They should lead you to the problem.
 
 
 Installing
@@ -125,6 +130,7 @@ already built in to dump, but its use is optional (it need not be installed).
 
 It is also best, if it can be arranged, to keep your backups at a remote site so 
 that your backups do not get destroyed in the same disaster, such as a fire or 
-flood, that claims your original file. Duplicity offers a number of backends 
-that allow you to place your backups in the cloud (Rackspace, Dropbox, Amazon, 
-Google, etc.).  Remember, your data is fully encrypted, so they cannot pry.
+flood, that claims your original files. If you do not have, or do not wish to 
+use, your own server, Duplicity offers a number of backends that allow you to 
+place your backups in the cloud (Rackspace, Dropbox, Amazon, Google, etc.).  
+Remember, your data is fully encrypted, so they cannot pry.
