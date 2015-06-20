@@ -101,7 +101,7 @@ runAfterBackups = [
 # if set, this file must exist or backups will quit with an error
 mustExist = "$HOME/src/verif/av"
 
-bwLimit = '-l 2000'                              # bandwidth limit in kb/s
+bwLimit = '2000'                                 # bandwidth limit in kb/s
 notify = "admin@shalmirane.com"                  # email address to notify when things go wrong
 notifier = 'notify-send -u normal Dump "{msg}"'  # notifier program
 lockfile = "{srcDir}/.backups-are-running"       # lock file, used to tell if the program is already running
@@ -149,8 +149,11 @@ def error(msg):
 
 # Setup {{{1
 # Duplicity and SSH options {{{2
-duplicityOptions = ['--ssh-backend', 'pexpect', '--log-file', expand(logFile)]
-sftpCommand = ['--sftp-command', 'sftp -i {sshIdentity} {bwLimit}']
+logFile = ['--log-file', logFile] if logFile else []
+bwLimit = '-l %s' % bwLimit if bwLimit else ''
+sshIdentity = '-i %s' % sshIdentity if sshIdentity else ''
+duplicityOptions = ['--ssh-backend', 'pexpect'] + logFile
+sftpCommand = ['--sftp-command', 'sftp {sshIdentity} {bwLimit}']
 archiveDirCommand = ['--archive-dir', archiveDir, '--name', name]
 destination = expand('sftp://{destServer}/{destDir}')
 
