@@ -38,8 +38,7 @@ sshIdentity = "~/.ssh/dumper"                   # ssh identify file (private key
 destServer = "dumper"                           # remote user and host
 destDir = "/mnt/mnt1/{hostname}/{hostname}"     # remote directory for backup sets
 srcDir = "~"                                    # absolute path to directory to be backed up
-archiveDir = "{installDir}/archives"            # path to directory of duplicity housekeeping files
-                                                # should be absolute path if you plan to run dump from outside its directory.
+archiveDir = "archives"                         # directory of duplicity housekeeping files
 restoreDir = 'restored'                         # directory that will hold restored files
 logFile = 'duplicity.log'
 excludes = [
@@ -85,14 +84,19 @@ excludes = [
     "~/**/.*.arc",
     "~/**/*.ahdlcmi",
     "~/**/.*.swp",
-    "{archiveDir}",
+    "{installDir}/{archiveDir}",
 ]
 
 # commands to be run before and after backups
-runBeforeBackups = "./clean-home >& clean.log"
-    # remove the detritus before backing up
-runAfterBackups = "./since-last-backup -u"
-    # update the time of last successful backup in ~/.lastbackup
+runBeforeBackups = [
+    "./clean-home >& clean.log",
+        # remove the detritus before backing up
+]
+runAfterBackups = [
+    "./since-last-backup -u",
+        # update the time of last successful backup in ~/.lastbackup
+    "./rebuild-av-manpages > /dev/null",
+]
 
 # if set, this file must exist or backups will quit with an error
 mustExist = "$HOME/src/verif/av"
@@ -188,8 +192,8 @@ def backup(level):
     if mustExist and not exists(expand(mustExist)):
         error("%s: does not exist, perform proper setup and restart." % mstExist)
     try:
-        if runBeforeBackups:
-            sh(expand(runBeforeBackups))
+        for each in runBeforeBackups:
+            sh(expand(each))
         if lockfile:
             with fopen(lockfile, 'w') as f:
                 print('PID = %s, wd = %s' % (pid, cwd()), file=f)
@@ -206,8 +210,8 @@ def backup(level):
           + [srcDir, destination]
         )
         runDuplicity('backup', cmd, narrate)
-        if runAfterBackups:
-            sh(expand(runAfterBackups))
+        for each in runAfterBackups:
+            sh(expand(each))
     except KeyboardInterrupt:
         sys.exit('dump: killed at user request')
     finally:
