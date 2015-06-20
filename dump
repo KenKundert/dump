@@ -101,14 +101,14 @@ runAfterBackups = [
 # if set, this file must exist or backups will quit with an error
 mustExist = "$HOME/src/verif/av"
 
-bwLimit='-l 2000'                             # bandwidth limit in kb/s
-notify="admin@shalmirane.com"                 # email address to notify when things go wrong
-notifier='notify-send -u normal Dump "{msg}"' # notifier program
-lockfile="{srcDir}/.backups-are-running"      # lock file, used to tell if the program is already running
+bwLimit = '-l 2000'                              # bandwidth limit in kb/s
+notify = "admin@shalmirane.com"                  # email address to notify when things go wrong
+notifier = 'notify-send -u normal Dump "{msg}"'  # notifier program
+lockfile = "{srcDir}/.backups-are-running"       # lock file, used to tell if the program is already running
 
 
 # Utility functions -- should not need to change anything below line {{{1
-# Configure expand() so it expands ~, $var, and {attr} as expected 
+# Configure expand() so it expands ~, $var, and {attr} as expected
 script_prefs.set('expanduser', True)
 script_prefs.set('expandvars', True)
 hostname = socket.gethostname().split('.')[0]
@@ -138,10 +138,10 @@ def prefix(constant, members):
 def error(msg):
     if notify:
         sh(['mail', '-s "%s"' % msg, notify],
-                stdin=dedent('''
-                    source = {hostname}:{srcDir}
-                    destination = {destServer}:{destDir}
-                '''.format(**variables))
+            stdin=dedent('''
+                source = {hostname}:{srcDir}
+                destination = {destServer}:{destDir}
+            '''.format(**variables))
         )
     if notifier:
         sh(notifier.format(msg=msg))
@@ -149,7 +149,7 @@ def error(msg):
 
 # Setup {{{1
 # Duplicity and SSH options {{{2
-duplicityOptions=['--ssh-backend', 'pexpect', '--log-file', expand(logFile)]
+duplicityOptions = ['--ssh-backend', 'pexpect', '--log-file', expand(logFile)]
 sftpCommand = ['--sftp-command', 'sftp -i {sshIdentity} {bwLimit}']
 archiveDirCommand = ['--archive-dir', archiveDir, '--name', name]
 destination = expand('sftp://{destServer}/{destDir}')
@@ -180,7 +180,6 @@ lockfile = expand(lockfile) if lockfile else None
 
 # runDuplicity() {{{1
 def runDuplicity(name, cmd, narrate):
-    #print("### %s CMD: %s" % (name, ' '.join(cmd)))
     duplicity = Run(cmd, 's%sW' % ('oe' if narrate else 'OE'))
     if duplicity.status:
         error('%s failed' % name)
