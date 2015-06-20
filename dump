@@ -103,7 +103,7 @@ notifier='notify-send -u normal Dump "{msg}"' # notifier program
 lockfile="{srcDir}/.backups-are-running"      # lock file, used to tell if the program is already running
 
 
-# Utility functions; should not need to change anything below line {{{1
+# Utility functions -- should not need to change anything below line {{{1
 # Configure expand() so it expands ~, $var, and {attr} as expected 
 script_prefs.set('expanduser', True)
 script_prefs.set('expandvars', True)
