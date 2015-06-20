@@ -1,5 +1,5 @@
-DUMP: Encrypted Backups to a Remote Server
-==========================================
+dump -- Encrypted Backups to a Remote Server
+============================================
 
 Dump is a simple command line utility to orchestrate backups. It is built on 
 Duplicity, which is a powerful and flexible utility for managing encrypted 
@@ -107,7 +107,7 @@ This program is not generally installed. Instead, it is placed in the backups
 directory, customized to fit the situation, and used in place. It requires the 
 use of docopt, a standard python package that can be installed using pip. It 
 also requires script, which can be downloaded from `Github 
-<https://github.com/KenKundert/scripts>`.
+<https://github.com/KenKundert/scripts>`_.
 
 
 Precautions
@@ -124,7 +124,7 @@ so that it is not readable by others::
    chmod 700 dump
 
 Better yet is to simply not store the passphrase in the dump script. This can be 
-arranged if you are using `Abraxas <https://github.com/KenKundert/abraxas>`, 
+arranged if you are using `Abraxas <https://github.com/KenKundert/abraxas>`_, 
 which is a flexible password management system. The interface to Abraxas is 
 already built in to dump, but its use is optional (it need not be installed).
 
