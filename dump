@@ -1,0 +1,303 @@
+#!/usr/bin/env python3
+"""Backup files to a remote server
+
+Usage:
+    dump [options] backup [full | incremental]
+    dump [options] manifest
+    dump [options] restore <filelist>...
+    dump [options] cleanup
+
+Options:
+    -d <date>, --date <date>  date or time interval
+    -n, --narrate             send duplicity narration to stdout
+    -t, --trial-run           trial run
+    -v, --verbose             verbose
+
+If needed, date is given in one of the following forms:
+1. now (current time - the default)
+2. 3D12h (interval constructed using s, m, h, D, W, M, or Y)
+3. YYYY/MM/DD, YYYY-MM-DD, MM/DD/YYYY, or MM-DD-YYYY (date)
+"""
+
+# Imports {{{1
+from scripts import (
+    cwd, fopen, exists, head, isexecutable, join, mkdir, script_prefs, sh, rm,
+    Run, tail
+)
+from docopt import docopt
+from textwrap import dedent
+import socket
+import sys
+import os
+
+# Settings {{{1
+name = 'ken'                                    # descriptive name for the backups
+abraxasGpgAccount = 'duplicity-kundert'         # abraxas account that holds passphrase for GPG encryption key
+gpgPassphrase = None                            # passphrase for GPG encryption key (if specified, abraxas is not used)
+sshIdentity = "~/.ssh/dumper"                   # ssh identify file (private key without passphrase)
+destServer = "dumper"                           # remote user and host
+destDir = "/mnt/mnt1/{hostname}/{hostname}"     # remote directory for backup sets
+srcDir = "~"                                    # absolute path to directory to be backed up
+archiveDir = "{installDir}/archives"            # path to directory of duplicity housekeeping files
+                                                # should be absolute path if you plan to run dump from outside its directory.
+restoreDir = 'restored'                         # directory that will hold restored files
+logFile = 'duplicity.log'
+excludes = [
+    "~/tmp",
+    "~/media",
+    "~/lib/encrypted-volumes",
+    "~/src/backup-scripts/archive-dir",
+    "~/ABC",
+    "~/effsim",
+    "~/packages",
+    "~/lib/locatedbs",
+    "~/.armory",
+    "~/.bitcoin",
+    "~/.downloads",
+    "~/.local",
+    "~/.mozilla",
+    "~/.thunderbird",
+    "~/.npm",
+    "~/.wine",
+    "~/.wine-x86_64",
+    "~/.adobe",
+    "~/.cache",
+    "~/.config/mutt/cache",
+    "~/.config/evolution",
+    "~/.config/gconf",
+    "~/.config/google-chrome*",
+    "~/.config/pulse",
+    "~/.config/Skype",
+    "~/.dbus",
+    "~/.gimp-*",
+    "~/.gnome",
+    "~/.gnome2",
+    "~/.jitsi",
+    "~/.purple",
+    "~/.thumbnails",
+    "~/.config/libreoffice",
+    "~/.config/fish/generated_completions",
+    "~/.local",
+    "~/**/.hg",
+    "~/**/.git",
+    "~/**/tags",
+    "~/**/*.pyc",
+    "~/**/.*.arc",
+    "~/**/*.ahdlcmi",
+    "~/**/.*.swp",
+    "{cwd}/{archiveDir}",
+]
+
+# commands to be run before and after backups
+runBeforeBackups = "./clean-home >& clean.log"
+    # remove the detritus before backing up
+runAfterBackups = "./since-last-backup -u"
+    # update the time of last successful backup in ~/.lastbackup
+
+# if set, this file must exist or backups will quit with an error
+mustExist = "$HOME/src/verif/av"
+
+bwLimit='-l 2000'                             # bandwidth limit in kb/s
+notify="admin@shalmirane.com"                 # email address to notify when things go wrong
+notifier='notify-send -u normal Dump "{msg}"' # notifier program
+lockfile="{srcDir}/.backups-are-running"      # lock file, used to tell if the program is already running
+
+
+# Utility functions; should not need to change anything below line {{{1
+# Configure expand() so it expands ~, $var, and {attr} as expected 
+script_prefs.set('expanduser', True)
+script_prefs.set('expandvars', True)
+hostname = socket.gethostname().split('.')[0]
+sshIdentity = join(sshIdentity)
+installDir = head(__file__)
+variables = locals()
+
+# expand {attr} constructs in a string recursively, then expand ~ and $VAR
+def expand(name):
+    new = name.format(**variables)
+    if new == name:
+        return join(new) # join() is used to expand ~ and $VAR
+    else:
+        return expand(new)
+
+# expand ~, $var, and {attr} constructs in a list of strings
+def expandAll(names):
+    return [expand(each) for each in names if each]
+
+# take a list and double its length be adding a constant before each member
+def prefix(constant, members):
+    for member in members:
+        yield constant
+        yield member
+
+# handle errors
+def error(msg):
+    if notify:
+        sh(['mail', '-s "%s"' % msg, notify],
+                stdin=dedent('''
+                    source = {hostname}:{srcDir}
+                    destination = {destServer}:{destDir}
+                '''.format(**variables))
+        )
+    if notifier:
+        sh(notifier.format(msg=msg))
+    sys.exit('dump: ' + msg)
+
+# Setup {{{1
+# Duplicity and SSH options {{{2
+duplicityOptions=['--ssh-backend', 'pexpect', '--log-file', expand(logFile)]
+sftpCommand = ['--sftp-command', 'sftp -i {sshIdentity} {bwLimit}']
+archiveDirCommand = ['--archive-dir', archiveDir, '--name', name]
+destination = expand('sftp://{destServer}/{destDir}')
+
+# Read command line {{{2
+cmdline = docopt(__doc__)
+duplicityOptions += ['-v9'] if cmdline['--verbose'] else ['-v8']
+duplicityOptions += ['--dry-run'] if cmdline['--trial-run'] else []
+narrate = cmdline['--narrate']
+
+# Get GPG passphrase {{{2
+if not gpgPassphrase:
+    try:
+        from abraxas import PasswordGenerator
+    except ImportError:
+        sys.exit('abraxas is not available, you must specify passphrase in dump settings.')
+    pw = PasswordGenerator()
+    pw.read_accounts()
+    acct = pw.get_account(abraxasGpgAccount)
+    gpgPassphrase = pw.generate_password()
+os.environ['PASSPHRASE'] = gpgPassphrase
+
+# Process the settings {{{2
+destDir = expand(destDir)
+srcDir = expand(srcDir)
+cwd = cwd()
+pid = os.getpid()
+lockfile = expand(lockfile) if lockfile else None
+
+# runDuplicity() {{{1
+def runDuplicity(name, cmd, narrate):
+    #print("### %s CMD: %s" % (name, ' '.join(cmd)))
+    duplicity = Run(cmd, 's%sW' % ('oe' if narrate else 'OE'))
+    if duplicity.status:
+        error('%s failed' % name)
+
+# backup() {{{1
+def backup(level):
+    if exists(lockfile):
+        error("backups skipped because a previous run has not yet completed.")
+    if mustExist and not exists(expand(mustExist)):
+        error("%s: does not exist, perform proper setup and restart." % mstExist)
+    try:
+        if runBeforeBackups:
+            sh(expand(runBeforeBackups))
+        if lockfile:
+            with fopen(lockfile, 'w') as f:
+                print('PID = %s, wd = %s' % (pid, cwd), file=f)
+        cmd = (
+            [   'duplicity',
+                level,
+                '--timeout', '1800',
+                '--allow-source-mismatch',
+            ]
+          + expandAll(duplicityOptions)
+          + expandAll(archiveDirCommand)
+          + expandAll(sftpCommand)
+          + list(prefix('--exclude', expandAll(excludes)))
+          + [srcDir, destination]
+        )
+        runDuplicity('backup', cmd, narrate)
+        if runAfterBackups:
+            sh(expand(runAfterBackups))
+    except KeyboardInterrupt:
+        sys.exit('dump: killed at user request')
+    finally:
+        if lockfile:
+            rm(lockfile)
+
+# restore() {{{1
+def restore(filelist, date):
+    date = ['--time', date] if date else []
+    mkdir(join(restoreDir))
+    for each in filelist:
+        dest = join(restoreDir, tail(each))
+        cmd = (
+            [   'duplicity',
+                'restore',
+                '--file-to-restore', each,
+                '--timeout', '120',
+            ]
+          + expandAll(duplicityOptions)
+          + expandAll(archiveDirCommand)
+          + expandAll(sftpCommand)
+          + date
+          + [destination, dest]
+        )
+        try:
+            runDuplicity('restore', cmd, narrate)
+        except KeyboardInterrupt:
+            sys.exit('dump: killed at user request')
+        print("%s: restored as: %s" % (each, dest))
+
+# manifest() {{{1
+def manifest(date):
+    date = ['--time', date] if date else []
+    cmd = (
+        [   'duplicity',
+            'list-current-files',
+            '--timeout', '600',
+        ]
+      + expandAll(duplicityOptions)
+      + expandAll(archiveDirCommand)
+      + expandAll(sftpCommand)
+      + date
+      + [destination]
+    )
+    try:
+        runDuplicity('manifest', cmd, True)
+    except KeyboardInterrupt:
+        sys.exit('dump: killed at user request')
+
+# cleanup() {{{1
+def cleanup(date):
+    try:
+        # first remove any extraneous files from failed sessions
+        cmd = (
+            [   'duplicity',
+                'cleanup',
+                '--force',
+                '--timeout', '120',
+            ]
+          + expandAll(duplicityOptions)
+          + expandAll(archiveDirCommand)
+          + expandAll(sftpCommand)
+          + [destination]
+        )
+        runDuplicity('cleanup', cmd, narrate)
+
+        # now remove backup sets that only contain old files
+        if date:
+            cmd = ([
+                'duplicity',
+                'remove-older-than', date,
+                '--force',
+                '--timeout', '120',
+            ] + expandAll(duplicityOptions)
+              + expandAll(archiveDirCommand)
+              + expandAll(sftpCommand)
+              + [destination]
+            )
+            runDuplicity('remove', cmd, narrate)
+    except KeyboardInterrupt:
+        sys.exit('dump: killed at user request')
+
+# Run commands {{{1
+if cmdline['backup']:
+    backup('full' if cmdline['full'] else 'incremental')
+elif cmdline['restore']:
+    restore(cmdline['<filelist>'], cmdline['--date'])
+elif cmdline['manifest']:
+    manifest(cmdline['--date'])
+elif cmdline['cleanup']:
+    cleanup(cmdline['--date'])
+sys.exit()
