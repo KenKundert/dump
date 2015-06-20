@@ -192,7 +192,7 @@ def backup(level):
     if exists(lockfile):
         error("backups skipped because a previous run has not yet completed.")
     if mustExist and not exists(expand(mustExist)):
-        error("%s: does not exist, perform proper setup and restart." % mstExist)
+        error("%s: does not exist, perform proper setup and restart." % mustExist)
     try:
         for each in runBeforeBackups:
             sh(expand(each))
