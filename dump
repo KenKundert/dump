@@ -21,7 +21,7 @@ If needed, date is given in one of the following forms:
 
 # Imports {{{1
 from scripts import (
-    cwd, fopen, exists, head, isexecutable, join, mkdir, script_prefs, sh, rm,
+    abspath, cwd, fopen, exists, head, isexecutable, join, mkdir, script_prefs, sh, rm,
     Run, tail
 )
 from docopt import docopt
@@ -85,7 +85,7 @@ excludes = [
     "~/**/.*.arc",
     "~/**/*.ahdlcmi",
     "~/**/.*.swp",
-    "{cwd}/{archiveDir}",
+    "{archiveDir}",
 ]
 
 # commands to be run before and after backups
@@ -109,7 +109,7 @@ script_prefs.set('expanduser', True)
 script_prefs.set('expandvars', True)
 hostname = socket.gethostname().split('.')[0]
 sshIdentity = join(sshIdentity)
-installDir = head(__file__)
+installDir = abspath(head(__file__))
 variables = locals()
 
 # expand {attr} constructs in a string recursively, then expand ~ and $VAR
@@ -124,7 +124,7 @@ def expand(name):
 def expandAll(names):
     return [expand(each) for each in names if each]
 
-# take a list and double its length be adding a constant before each member
+# take a list and double its length by adding a constant before each member
 def prefix(constant, members):
     for member in members:
         yield constant
@@ -171,7 +171,6 @@ os.environ['PASSPHRASE'] = gpgPassphrase
 # Process the settings {{{2
 destDir = expand(destDir)
 srcDir = expand(srcDir)
-cwd = cwd()
 pid = os.getpid()
 lockfile = expand(lockfile) if lockfile else None
 
@@ -193,7 +192,7 @@ def backup(level):
             sh(expand(runBeforeBackups))
         if lockfile:
             with fopen(lockfile, 'w') as f:
-                print('PID = %s, wd = %s' % (pid, cwd), file=f)
+                print('PID = %s, wd = %s' % (pid, cwd()), file=f)
         cmd = (
             [   'duplicity',
                 level,
