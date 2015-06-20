@@ -5,7 +5,7 @@ Dump is a simple command line utility to orchestrate backups. It is built on
 Duplicity, which is a powerful and flexible utility for managing encrypted 
 backups, however it has a rather heavy user interface. With dump, you specify 
 all the details about your backups once in advance, and then use a very simple 
-command line interface for your day to day activities.
+command line interface for your day-to-day activities.
 
 Dump is a relatively small python script that designed to be modified to 
 customize it for a particular backup. If you wish multiple backups, you simply 
