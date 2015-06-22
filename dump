@@ -27,21 +27,22 @@ from scripts import (
 from docopt import docopt
 from textwrap import dedent
 import socket
+import getpass
 import sys
 import os
 
 # Settings {{{1
 name = 'ken'                                    # descriptive name for the backups
-abraxasGpgAccount = 'duplicity-kundert'         # abraxas account that holds passphrase for GPG encryption key
-gpgPassphrase = None                            # passphrase for GPG encryption key (if specified, abraxas is not used)
-sshIdentity = "~/.ssh/dumper"                   # ssh identify file (private key without passphrase)
-destServer = "dumper"                           # remote user and host
-destDir = "/mnt/mnt1/{hostname}/{hostname}"     # remote directory for backup sets
-srcDir = "~"                                    # absolute path to directory to be backed up
-archiveDir = "archives"                         # directory of duplicity housekeeping files
-restoreDir = 'restored'                         # directory that will hold restored files
-logFile = 'duplicity.log'
-excludes = [
+AbraxasGpgAccount = 'duplicity-kundert'         # abraxas account that holds passphrase for GPG encryption key
+GpgPassphrase = None                            # passphrase for GPG encryption key (if specified, abraxas is not used)
+SshIdentity = "~/.ssh/dumper"                   # ssh identify file (private key without passphrase)
+DestServer = "dumper"                           # remote user and host (user@server)
+DestDir = "/mnt/mnt1/{hostname}/{hostname}"     # remote directory for backup sets
+SrcDir = "~"                                    # absolute path to directory to be backed up
+ArchiveDir = "archives"                         # directory of duplicity housekeeping files
+RestoreDir = 'restored'                         # directory that will hold restored files
+LogFile = 'duplicity.log'
+Excludes = [
     "~/tmp",
     "~/media",
     "~/lib/encrypted-volumes",
@@ -84,27 +85,28 @@ excludes = [
     "~/**/.*.arc",
     "~/**/*.ahdlcmi",
     "~/**/.*.swp",
-    "{installDir}/{archiveDir}",
+    "{installDir}/{ArchiveDir}",
+    "{installDir}/{LogFile}",
 ]
 
 # commands to be run before and after backups
-runBeforeBackups = [
+RunBeforeBackups = [
     "./clean-home >& clean.log",
         # remove the detritus before backing up
 ]
-runAfterBackups = [
+RunAfterBackups = [
     "./since-last-backup -u",
         # update the time of last successful backup in ~/.lastbackup
     "./rebuild-av-manpages > /dev/null",
 ]
 
 # if set, this file must exist or backups will quit with an error
-mustExist = "$HOME/src/verif/av"
+MustExist = "$HOME/src/verif/av"
 
-bwLimit = '2000'                                 # bandwidth limit in kb/s
-notify = "admin@shalmirane.com"                  # email address to notify when things go wrong
-notifier = 'notify-send -u normal Dump "{msg}"'  # notifier program
-lockfile = "{srcDir}/.backups-are-running"       # lock file, used to tell if the program is already running
+BwLimit = '2000'                                 # bandwidth limit in kb/s
+Notify = "admin@shalmirane.com"                  # email address to notify when things go wrong
+Notifier = 'notify-send -u normal Dump "{msg}"'  # notifier program
+Lockfile = "{SrcDir}/.backups-are-running"       # lock file, used to tell if the program is already running
 
 
 # Utility functions -- should not need to change anything below line {{{1
@@ -112,7 +114,8 @@ lockfile = "{srcDir}/.backups-are-running"       # lock file, used to tell if th
 script_prefs.set('expanduser', True)
 script_prefs.set('expandvars', True)
 hostname = socket.gethostname().split('.')[0]
-sshIdentity = join(sshIdentity)
+user = getpass.getuser()
+sshIdentity = join(SshIdentity)
 installDir = abspath(head(__file__))
 variables = locals()
 
@@ -136,26 +139,35 @@ def prefix(constant, members):
 
 # handle errors
 def error(msg):
-    if notify:
-        sh(['mail', '-s "%s"' % msg, notify],
+    if Notify:
+        sh(['mail', '-s "%s"' % msg, Notify],
             stdin=dedent('''
-                source = {hostname}:{srcDir}
-                destination = {destServer}:{destDir}
+                source = {hostname}:{SrcDir}
+                destination = {DestServer}:{DestDir}
             '''.format(**variables))
         )
-    if notifier:
-        sh(notifier.format(msg=msg))
+    if Notifier:
+        sh(Notifier.format(msg=msg))
     sys.exit('dump: ' + msg)
 
 # Setup {{{1
+# Process the settings {{{2
+destDir = expand(DestDir)
+srcDir = expand(SrcDir)
+archiveDir = expand(ArchiveDir)
+restoreDir = expand(RestoreDir)
+logFile = expand(LogFile)
+lockfile = expand(Lockfile) if Lockfile else None
+pid = os.getpid()
+
 # Duplicity and SSH options {{{2
-logFile = ['--log-file', logFile] if logFile else []
-bwLimit = '-l %s' % bwLimit if bwLimit else ''
-sshIdentity = '-i %s' % sshIdentity if sshIdentity else ''
-duplicityOptions = ['--ssh-backend', 'pexpect'] + logFile
-sftpCommand = ['--sftp-command', 'sftp {sshIdentity} {bwLimit}']
+logFileArg = ['--log-file', logFile] if logFile else []
+bwLimitArg = '-l %s' % BwLimit if BwLimit else ''
+sshIdentityArg = '-i %s' % sshIdentity if sshIdentity else ''
+duplicityOptions = ['--ssh-backend', 'pexpect'] + logFileArg
+sftpCommand = ['--sftp-command', 'sftp {sshIdentityArg} {bwLimitArg}']
 archiveDirCommand = ['--archive-dir', archiveDir, '--name', name]
-destination = expand('sftp://{destServer}/{destDir}')
+destination = expand('sftp://{DestServer}/{destDir}')
 
 # Read command line {{{2
 cmdline = docopt(__doc__)
@@ -164,22 +176,16 @@ duplicityOptions += ['--dry-run'] if cmdline['--trial-run'] else []
 narrate = cmdline['--narrate']
 
 # Get GPG passphrase {{{2
-if not gpgPassphrase:
+if not GpgPassphrase:
     try:
         from abraxas import PasswordGenerator
     except ImportError:
         sys.exit('abraxas is not available, you must specify passphrase in dump settings.')
     pw = PasswordGenerator()
     pw.read_accounts()
-    acct = pw.get_account(abraxasGpgAccount)
-    gpgPassphrase = pw.generate_password()
-os.environ['PASSPHRASE'] = gpgPassphrase
-
-# Process the settings {{{2
-destDir = expand(destDir)
-srcDir = expand(srcDir)
-pid = os.getpid()
-lockfile = expand(lockfile) if lockfile else None
+    acct = pw.get_account(AbraxasGpgAccount)
+    GpgPassphrase = pw.generate_password()
+os.environ['PASSPHRASE'] = GpgPassphrase
 
 # runDuplicity() {{{1
 def runDuplicity(name, cmd, narrate):
@@ -191,10 +197,10 @@ def runDuplicity(name, cmd, narrate):
 def backup(level):
     if exists(lockfile):
         error("backups skipped because a previous run has not yet completed.")
-    if mustExist and not exists(expand(mustExist)):
-        error("%s: does not exist, perform proper setup and restart." % mustExist)
+    if MustExist and not exists(expand(MustExist)):
+        error("%s: does not exist, perform proper setup and restart." % MustExist)
     try:
-        for each in runBeforeBackups:
+        for each in RunBeforeBackups:
             sh(expand(each))
         if lockfile:
             with fopen(lockfile, 'w') as f:
@@ -208,11 +214,11 @@ def backup(level):
           + expandAll(duplicityOptions)
           + expandAll(archiveDirCommand)
           + expandAll(sftpCommand)
-          + list(prefix('--exclude', expandAll(excludes)))
+          + list(prefix('--exclude', expandAll(Excludes)))
           + [srcDir, destination]
         )
         runDuplicity('backup', cmd, narrate)
-        for each in runAfterBackups:
+        for each in RunAfterBackups:
             sh(expand(each))
     except KeyboardInterrupt:
         sys.exit('dump: killed at user request')
@@ -223,7 +229,7 @@ def backup(level):
 # restore() {{{1
 def restore(filelist, date):
     date = ['--time', date] if date else []
-    mkdir(join(restoreDir))
+    mkdir(join(nestoreDir))
     for each in filelist:
         dest = join(restoreDir, tail(each))
         cmd = (
