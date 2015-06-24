@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""
+Days Since Last Backup
+
+Used with status bar programs, such as i3status, to make user aware that backups
+are due.
+
+Usage:
+    since-last-backup [options]
+
+Options:
+    -u, --update               update the date of the last backup to now
+    -d <num>, --days <num>     emit message if this many days have passed
+    -m <msg>, --message <msg>  the message to emit
+
+Example:
+    since-last-backup -d3 -m "It has been {days:.1f} days since the last backup."
+"""
+from docopt import docopt
+import datetime
+import dateutil.parser
+import os
+
+date_file = '~/.lastbackup'
+
+args = docopt(__doc__)
+
+if args['--update']:
+    with open(os.path.expanduser(date_file), 'w') as f:
+        f.write(datetime.datetime.today().isoformat())
+    exit()
+
+with open(os.path.expanduser(date_file), 'U') as f:
+    backup_date = dateutil.parser.parse(f.read())
+
+now = datetime.datetime.today()
+delta = now - backup_date
+days = delta.total_seconds()/86400
+
+if args['--message']:
+    message = args['--message'].format(days=days)
+else:
+    message = "%.1f" % days
+
+if args['--days']:
+    thresh = float(args['--days'])
+    if days < thresh:
+        exit()
+print(message)
