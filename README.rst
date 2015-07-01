@@ -79,7 +79,7 @@ You can clean up your remote repository using::
 
 This removes any unneeded files Duplicity created files in the remote 
 repository.  This is not normally necessary, however it can be helpful if 
-a previous session terminate abnormally.
+a previous session terminated abnormally.
 
 If you also give a date, any backup sets that only contain files that are older 
 than the given date are deleted::

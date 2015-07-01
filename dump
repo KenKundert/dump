@@ -77,6 +77,7 @@ Excludes = [
     "~/.thumbnails",
     "~/.config/libreoffice",
     "~/.config/fish/generated_completions",
+    "~/src/verif/lost+found",
     "~/.local",
     "~/**/.hg",
     "~/**/.git",
@@ -111,8 +112,7 @@ Lockfile = "{SrcDir}/.backups-are-running"       # lock file, used to tell if th
 
 # Utility functions -- should not need to change anything below line {{{1
 # Configure expand() so it expands ~, $var, and {attr} as expected
-script_prefs.set('expanduser', True)
-script_prefs.set('expandvars', True)
+script_prefs(exit_upon_error=True, expanduser=True, expandvars=True)
 hostname = socket.gethostname().split('.')[0]
 user = getpass.getuser()
 sshIdentity = join(SshIdentity)
@@ -140,7 +140,7 @@ def prefix(constant, members):
 # handle errors
 def error(msg):
     if Notify:
-        sh(['mail', '-s "%s"' % msg, Notify],
+        sh(['mail', '-s "dump: %s"' % msg, Notify],
             stdin=dedent('''
                 source = {hostname}:{SrcDir}
                 destination = {DestServer}:{DestDir}
@@ -229,7 +229,7 @@ def backup(level):
 # restore() {{{1
 def restore(filelist, date):
     date = ['--time', date] if date else []
-    mkdir(join(nestoreDir))
+    mkdir(join(restoreDir))
     for each in filelist:
         dest = join(restoreDir, tail(each))
         cmd = (
