@@ -45,14 +45,9 @@ LogFile = 'duplicity.log'
 Excludes = [
     "~/tmp",
     "~/media",
-    "~/lib/encrypted-volumes",
-    "~/src/backup-scripts/archive-dir",
-    "~/ABC",
     "~/effsim",
     "~/packages",
     "~/lib/locatedbs",
-    "~/.armory",
-    "~/.bitcoin",
     "~/.downloads",
     "~/.local",
     "~/.mozilla",
@@ -63,7 +58,6 @@ Excludes = [
     "~/.adobe",
     "~/.cache",
     "~/.config/mutt/cache",
-    "~/.config/evolution",
     "~/.config/gconf",
     "~/.config/google-chrome*",
     "~/.config/pulse",
@@ -77,7 +71,6 @@ Excludes = [
     "~/.thumbnails",
     "~/.config/libreoffice",
     "~/.config/fish/generated_completions",
-    "~/src/verif/lost+found",
     "~/.local",
     "~/**/.hg",
     "~/**/.git",
@@ -98,7 +91,6 @@ RunBeforeBackups = [
 RunAfterBackups = [
     "./since-last-backup -u",
         # update the time of last successful backup in ~/.lastbackup
-    "./rebuild-av-manpages > /dev/null",
 ]
 
 # if set, this file must exist or backups will quit with an error
