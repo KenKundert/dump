@@ -67,7 +67,7 @@ You can restore the version of a file that existed on a particular date using::
 
 Or, you can restore the version that existed 6 months ago using::
 
-   ./dump --date -6M restore src/verif/av/manpages/settings.py
+   ./dump --date 6M restore src/verif/av/manpages/settings.py
 
 
 Cleanup

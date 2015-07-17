@@ -21,8 +21,8 @@ If needed, date is given in one of the following forms:
 
 # Imports {{{1
 from scripts import (
-    abspath, cwd, fopen, exists, head, isexecutable, join, mkdir, script_prefs, sh, rm,
-    Run, tail
+    abspath, cwd, fopen, exists, head, isexecutable, join, mkdir, rm, Run,
+    script_prefs, ScriptError, sh, tail
 )
 from docopt import docopt
 from textwrap import dedent
@@ -104,7 +104,7 @@ Lockfile = "{SrcDir}/.backups-are-running"       # lock file, used to tell if th
 
 # Utility functions -- should not need to change anything below line {{{1
 # Configure expand() so it expands ~, $var, and {attr} as expected
-script_prefs(exit_upon_error=True, expanduser=True, expandvars=True)
+script_prefs(exit_upon_error=False, expanduser=True, expandvars=True)
 hostname = socket.gethostname().split('.')[0]
 user = getpass.getuser()
 sshIdentity = join(SshIdentity)
@@ -140,50 +140,15 @@ def error(msg):
         )
     if Notifier:
         sh(Notifier.format(msg=msg))
-    sys.exit('dump: ' + msg)
-
-# Setup {{{1
-# Process the settings {{{2
-destDir = expand(DestDir)
-srcDir = expand(SrcDir)
-archiveDir = expand(ArchiveDir)
-restoreDir = expand(RestoreDir)
-logFile = expand(LogFile)
-lockfile = expand(Lockfile) if Lockfile else None
-pid = os.getpid()
-
-# Duplicity and SSH options {{{2
-logFileArg = ['--log-file', logFile] if logFile else []
-bwLimitArg = '-l %s' % BwLimit if BwLimit else ''
-sshIdentityArg = '-i %s' % sshIdentity if sshIdentity else ''
-duplicityOptions = ['--ssh-backend', 'pexpect'] + logFileArg
-sftpCommand = ['--sftp-command', 'sftp {sshIdentityArg} {bwLimitArg}']
-archiveDirCommand = ['--archive-dir', archiveDir, '--name', name]
-destination = expand('sftp://{DestServer}/{destDir}')
-
-# Read command line {{{2
-cmdline = docopt(__doc__)
-duplicityOptions += ['-v9'] if cmdline['--verbose'] else ['-v8']
-duplicityOptions += ['--dry-run'] if cmdline['--trial-run'] else []
-narrate = cmdline['--narrate']
-
-# Get GPG passphrase {{{2
-if not GpgPassphrase:
-    try:
-        from abraxas import PasswordGenerator
-    except ImportError:
-        sys.exit('abraxas is not available, you must specify passphrase in dump settings.')
-    pw = PasswordGenerator()
-    pw.read_accounts()
-    acct = pw.get_account(AbraxasGpgAccount)
-    GpgPassphrase = pw.generate_password()
-os.environ['PASSPHRASE'] = GpgPassphrase
+    sys.exit(fail('dump: ' + msg))
 
 # runDuplicity() {{{1
 def runDuplicity(name, cmd, narrate):
-    duplicity = Run(cmd, 's%sW' % ('oe' if narrate else 'OE'))
-    if duplicity.status:
-        error('%s failed' % name)
+    try:
+        duplicity = Run(cmd, 's%sW' % ('oe' if narrate else 'OE'))
+    except ScriptError as exception:
+        print(str(exception))
+        error('%s failed.' % name)
 
 # backup() {{{1
 def backup(level):
@@ -213,7 +178,7 @@ def backup(level):
         for each in RunAfterBackups:
             sh(expand(each))
     except KeyboardInterrupt:
-        sys.exit('dump: killed at user request')
+        error('dump: killed at user request.')
     finally:
         if lockfile:
             rm(lockfile)
@@ -236,10 +201,7 @@ def restore(filelist, date):
           + date
           + [destination, dest]
         )
-        try:
-            runDuplicity('restore', cmd, narrate)
-        except KeyboardInterrupt:
-            sys.exit('dump: killed at user request')
+        runDuplicity('restore', cmd, narrate)
         print("%s: restored as: %s" % (each, dest))
 
 # manifest() {{{1
@@ -256,51 +218,96 @@ def manifest(date):
       + date
       + [destination]
     )
-    try:
-        runDuplicity('manifest', cmd, True)
-    except KeyboardInterrupt:
-        sys.exit('dump: killed at user request')
+    runDuplicity('manifest', cmd, True)
 
 # cleanup() {{{1
 def cleanup(date):
-    try:
-        # first remove any extraneous files from failed sessions
-        cmd = (
-            [   'duplicity',
-                'cleanup',
-                '--force',
-                '--timeout', '120',
-            ]
-          + expandAll(duplicityOptions)
+    # first remove any extraneous files from failed sessions
+    cmd = (
+        [   'duplicity',
+            'cleanup',
+            '--force',
+            '--timeout', '120',
+        ]
+      + expandAll(duplicityOptions)
+      + expandAll(archiveDirCommand)
+      + expandAll(sftpCommand)
+      + [destination]
+    )
+    runDuplicity('cleanup', cmd, narrate)
+
+    # now remove backup sets that only contain old files
+    if date:
+        cmd = ([
+            'duplicity',
+            'remove-older-than', date,
+            '--force',
+            '--timeout', '120',
+        ] + expandAll(duplicityOptions)
           + expandAll(archiveDirCommand)
           + expandAll(sftpCommand)
           + [destination]
         )
-        runDuplicity('cleanup', cmd, narrate)
+        runDuplicity('remove', cmd, narrate)
 
-        # now remove backup sets that only contain old files
-        if date:
-            cmd = ([
-                'duplicity',
-                'remove-older-than', date,
-                '--force',
-                '--timeout', '120',
-            ] + expandAll(duplicityOptions)
-              + expandAll(archiveDirCommand)
-              + expandAll(sftpCommand)
-              + [destination]
-            )
-            runDuplicity('remove', cmd, narrate)
-    except KeyboardInterrupt:
-        sys.exit('dump: killed at user request')
+# Setup {{{1
+# Color messages {{{2
+try:
+    from textcolors import Colors, isTTY
+    colors = Colors(isTTY())
+    fail = colors.colorizer('red')
+except ImportError:
+    fail = lambda a: a
 
-# Run commands {{{1
-if cmdline['backup']:
-    backup('full' if cmdline['full'] else 'incremental')
-elif cmdline['restore']:
-    restore(cmdline['<filelist>'], cmdline['--date'])
-elif cmdline['manifest']:
-    manifest(cmdline['--date'])
-elif cmdline['cleanup']:
-    cleanup(cmdline['--date'])
-sys.exit()
+# Process the settings {{{2
+try:
+    destDir = expand(DestDir)
+    srcDir = expand(SrcDir)
+    archiveDir = expand(ArchiveDir)
+    restoreDir = expand(RestoreDir)
+    logFile = expand(LogFile)
+    lockfile = expand(Lockfile) if Lockfile else None
+    pid = os.getpid()
+
+    # Duplicity and SSH options {{{2
+    logFileArg = ['--log-file', logFile] if logFile else []
+    bwLimitArg = '-l %s' % BwLimit if BwLimit else ''
+    sshIdentityArg = '-i %s' % sshIdentity if sshIdentity else ''
+    duplicityOptions = ['--ssh-backend', 'pexpect'] + logFileArg
+    sftpCommand = ['--sftp-command', 'sftp {sshIdentityArg} {bwLimitArg}']
+    archiveDirCommand = ['--archive-dir', archiveDir, '--name', name]
+    destination = expand('sftp://{DestServer}/{destDir}')
+
+    # Read command line {{{2
+    cmdline = docopt(__doc__)
+    duplicityOptions += ['-v9'] if cmdline['--verbose'] else ['-v8']
+    duplicityOptions += ['--dry-run'] if cmdline['--trial-run'] else []
+    narrate = cmdline['--narrate']
+
+    # Get GPG passphrase {{{2
+    if not GpgPassphrase:
+        try:
+            from abraxas import PasswordGenerator
+        except ImportError:
+            error('abraxas is not available, you must specify passphrase in dump settings.')
+        pw = PasswordGenerator()
+        pw.read_accounts()
+        acct = pw.get_account(AbraxasGpgAccount)
+        GpgPassphrase = pw.generate_password()
+    os.environ['PASSPHRASE'] = GpgPassphrase
+
+    # Run commands {{{1
+    if cmdline['backup']:
+        backup('full' if cmdline['full'] else 'incremental')
+    elif cmdline['restore']:
+        restore(cmdline['<filelist>'], cmdline['--date'])
+    elif cmdline['manifest']:
+        manifest(cmdline['--date'])
+    elif cmdline['cleanup']:
+        cleanup(cmdline['--date'])
+    sys.exit()
+
+except ScriptError as exception:
+    error(str(exception))
+except KeyboardInterrupt:
+    error('dump: killed at user request')
