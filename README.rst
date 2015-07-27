@@ -105,9 +105,9 @@ Installing
 
 This program is not generally installed. Instead, it is placed in the backups 
 directory, customized to fit the situation, and used in place. It requires the 
-use of docopt, a standard python package that can be installed using pip. It 
-also requires script, which can be downloaded from `Github 
-<https://github.com/KenKundert/scripts>`_.
+use of docopt, a standard python package that can be installed using pip (``pip 
+install docopt``).  It also requires scripts, which can be downloaded from 
+`Github <https://github.com/KenKundert/scripts>`_.
 
 
 Precautions
