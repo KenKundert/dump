@@ -17,6 +17,20 @@ contains Duplicity housekeeping files for the backup. You can place as many of
 the dump executables as you wish in that directory and they can be configured to 
 share the archive directory.
 
+Installation
+------------
+
+You generally would not install dump because the executable is tailored to back 
+up a specific directory. Instead you generally just run it in place. If you 
+would like to backup multiple directories, simply make multiple copies of the 
+dump executable and customize each one.
+
+Before you can use dump you need to install docopt using::
+
+   yum install python-docopt (or python3-docopt)
+
+You also need `scripts <https://github.com/KenKundert/scripts`_. You can install 
+it or simply copy scripts.py into the dump source directory.
 
 Backup
 ------
@@ -134,3 +148,17 @@ flood, that claims your original files. If you do not have, or do not wish to
 use, your own server, Duplicity offers a number of backends that allow you to 
 place your backups in the cloud (Rackspace, Dropbox, Amazon, Google, etc.).  
 Remember, your data is fully encrypted, so they cannot pry.
+
+Duplicity
+---------
+Between Duplicity version 0.6.25 and 0.7.05 the way you specify the SSH backend 
+changes. Duplicity provides several different implementations of the SSH 
+backend. The default in paramiko, however it does not support bandwidth 
+limiting. So instead, dump uses the pexpect version. In version 0.6.25 the 
+backend was specified with '--ssh-backend pexpect'. In version 0.7.05 the it is 
+specified by adding it to the protocol specification for the remote destination, 
+so 'sftp://...' changes to 'pexpect+sftp://...'.
+
+To address this, dump provides the SSH_BACKEND_METHOD which should be set to 
+'option' for Duplicity version 0.6.25 and lower, and should be set to 'protocol' 
+for version 0.7.05 and above.
