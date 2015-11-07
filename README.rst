@@ -17,21 +17,6 @@ contains Duplicity housekeeping files for the backup. You can place as many of
 the dump executables as you wish in that directory and they can be configured to 
 share the archive directory.
 
-Installation
-------------
-
-You generally would not install dump because the executable is tailored to back 
-up a specific directory. Instead you generally just run it in place. If you 
-would like to backup multiple directories, simply make multiple copies of the 
-dump executable and customize each one.
-
-Before you can use dump you need to install docopt using::
-
-   yum install python-docopt (or python3-docopt)
-
-You also need `scripts <https://github.com/KenKundert/scripts`_. You can install 
-it or simply copy scripts.py into the dump source directory.
-
 Backup
 ------
 Once configured, you would perform your first backup as a full backup::
@@ -117,11 +102,17 @@ Then carefully read the error messages. They should lead you to the problem.
 Installing
 ----------
 
-This program is not generally installed. Instead, it is placed in the backups 
-directory, customized to fit the situation, and used in place. It requires the 
-use of docopt, a standard python package that can be installed using pip (``pip 
-install docopt``).  It also requires scripts, which can be downloaded from 
-`Github <https://github.com/KenKundert/scripts>`_.
+You generally would not install dump because the executable is tailored to back 
+up a specific directory. Instead you just run it in place. If you would like to 
+backup multiple directories, simply make multiple copies of the dump executable 
+and customize each one.
+
+Before you can use dump you need to install docopt using::
+
+   yum install python-docopt (or python3-docopt)
+
+You also need `scripts <https://github.com/KenKundert/scripts`_. You can install 
+it or simply copy scripts.py into the dump source directory.
 
 
 Precautions
@@ -148,6 +139,7 @@ flood, that claims your original files. If you do not have, or do not wish to
 use, your own server, Duplicity offers a number of backends that allow you to 
 place your backups in the cloud (Rackspace, Dropbox, Amazon, Google, etc.).  
 Remember, your data is fully encrypted, so they cannot pry.
+
 
 Duplicity
 ---------
