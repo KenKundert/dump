@@ -145,9 +145,9 @@ Duplicity
 ---------
 Between Duplicity version 0.6.25 and 0.7.05 the way you specify the SSH backend 
 changes. Duplicity provides several different implementations of the SSH 
-backend. The default in paramiko, however it does not support bandwidth 
+backend. The default is paramiko, however it does not support bandwidth 
 limiting. So instead, dump uses the pexpect version. In version 0.6.25 the 
-backend was specified with '--ssh-backend pexpect'. In version 0.7.05 the it is 
+backend was specified with '--ssh-backend pexpect'. In version 0.7.05 it is now 
 specified by adding it to the protocol specification for the remote destination, 
 so 'sftp://...' changes to 'pexpect+sftp://...'.
 
