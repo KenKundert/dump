@@ -111,8 +111,8 @@ Before you can use dump you need to install docopt using::
 
    yum install python-docopt (or python3-docopt)
 
-You also need `scripts <https://github.com/KenKundert/scripts`_. You can install 
-it or simply copy scripts.py into the dump source directory.
+You also need `scripts <https://github.com/KenKundert/scripts>`_. You can 
+install it or simply copy scripts.py into the dump source directory.
 
 
 Precautions
