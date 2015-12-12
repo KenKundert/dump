@@ -272,9 +272,8 @@ def cleanup(date):
 # Setup {{{1
 # Color messages {{{2
 try:
-    from textcolors import Colors, isTTY
-    colors = Colors(isTTY())
-    fail = colors.colorizer('red')
+    from messenger import Color
+    fail = Color('red', Color.isTTY(sys.stdout))
 except ImportError:
     fail = lambda a: a
 
