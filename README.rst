@@ -114,8 +114,8 @@ Before you can use dump you need to install docopt using::
 You also need `scripts <https://github.com/KenKundert/scripts>`_. You can 
 install it or simply copy scripts.py into the dump source directory.
 
-You will also need the messenger package from my github account 
-(https://github.com/KenKundert/messenger.git).
+You will also need the inform package from my github account 
+(https://github.com/KenKundert/inform.git) or 'pip install inform'.
 
 
 Precautions

@@ -272,7 +272,7 @@ def cleanup(date):
 # Setup {{{1
 # Color messages {{{2
 try:
-    from messenger import Color
+    from inform import Color
     fail = Color('red', Color.isTTY(sys.stdout))
 except ImportError:
     fail = lambda a: a
