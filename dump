@@ -99,7 +99,7 @@ BW_LIMIT = '2000'                                # bandwidth limit in kb/s
 NOTIFY = "admin@shalmirane.com"                  # email address to notify when things go wrong
 NOTIFIER = 'notify-send -u normal Dump "{msg}"'  # notifier program
 LOCK_FILE = "{SRC_DIR}/.backups-are-running"     # lock file, used to tell if dump is already running
-SSH_BACKEND_METHOD = 'option'                    # use 'option' for Duplicity version 0.6.25 and lower
+SSH_BACKEND_METHOD = 'protocol'                  # use 'option' for Duplicity version 0.6.25 and lower
                                                  # use 'protocol' for Duplicity version 0.7.05 and above
 
 # Utility functions -- should not need to change anything below line {{{1
