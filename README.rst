@@ -89,6 +89,22 @@ This can reduce the size of your remote repository. Of course after doing this
 you may not be able to restore files that were deleted before the date you 
 specified.
 
+Help
+----
+
+Information about a variety of topics is provided with the help command.
+
+Use::
+
+   ./dump help
+
+for a list of topics, and::
+
+   ./dump help <topic>
+
+for information about a specific topic.
+
+
 Trouble
 -------
 

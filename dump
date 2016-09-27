@@ -7,25 +7,29 @@ Usage:
     dump [options] restore <filelist>...
     dump [options] verify
     dump [options] cleanup
+    dump help [<topic>]
 
 Options:
     -d <date>, --date <date>  date or time interval
-    -n, --narrate             send duplicity narration to stdout
+    -n, --narrate             send dump and duplicity narration to stdout
     -t, --trial-run           trial run
-    -v, --verbose             verbose
+    -v, --verbose             causes duplicity to be more verbose
 
 If needed, date is given in one of the following forms:
 1. now (current time - the default)
 2. 3D12h (interval constructed using s, m, h, D, W, M, or Y)
 3. YYYY/MM/DD, YYYY-MM-DD, MM/DD/YYYY, or MM-DD-YYYY (date)
+
+{topics}
 """
 
 # Imports {{{1
+from docopt import docopt
+from inform import display, fatal, full_stop, Inform, narrate
 from scripts import (
     abspath, cwd, fopen, exists, head, isexecutable, join, mkdir, rm, Run,
     script_prefs, ScriptError, sh, split, tail
 )
-from docopt import docopt
 from textwrap import dedent
 import socket
 import getpass
@@ -46,9 +50,7 @@ LOG_FILE = 'duplicity.log'                      # log file
 EXCLUDES = [                                    # list of glob strings of files or directories to skip
     "~/tmp",
     "~/media",
-    "~/effsim",
     "~/packages",
-    "~/lib/locatedbs",
     "~/.downloads",
     "~/.local",
     "~/.mozilla",
@@ -102,6 +104,128 @@ LOCK_FILE = "{SRC_DIR}/.backups-are-running"     # lock file, used to tell if du
 SSH_BACKEND_METHOD = 'protocol'                  # use 'option' for Duplicity version 0.6.25 and lower
                                                  # use 'protocol' for Duplicity version 0.7.05 and above
 
+# Help Topics {{{1
+HELP_TOPICS = {
+    'intro': dedent('''
+        Dump is a simple command line utility to orchestrate backups. It is 
+        built on Duplicity, which is a powerful and flexible utility for 
+        managing encrypted backups, however it has a rather heavy user 
+        interface. With dump, you specify all the details about your backups 
+        once in advance, and then use a very simple command line interface for 
+        your day-to-day activities.
+
+        Dump is a relatively small python script that designed to be modified to 
+        customize it for a particular backup. If you wish multiple backups, you 
+        simply copy the dump script and modify each copy for a particular 
+        backup.
+
+        Generally, you should dedicate a directory to your backups. That 
+        directory will hold the dump executable and the archive directory. The 
+        archive directory contains Duplicity housekeeping files for the backup. 
+        You can place as many of the dump executables as you wish in that 
+        directory and they can be configured to share the archive directory.
+    '''),
+    'backup': dedent('''
+        Once configured, you would perform your first backup as a full backup:
+
+            ./dump backup full
+
+        After than, you should prefer incremental backups, which you run using:
+
+            ./dump backup
+    '''),
+    'manifest': dedent('''
+        Once a backup has been performed, you can list the files available in 
+        your backup using:
+
+            ./dump manifest
+
+        You can list the files that existed on a particular date using:
+
+            ./dump --date 2015-04-01 manifest
+
+        Or, you can list the files that existed 3.5 days ago using:
+
+            ./dump --date 3D12h manifest
+
+        The interval string passed as the date is constructed using an integer 
+        followed by one of the following characters s (seconds), m (minutes), 
+        h (hours), D (days), W (weeks), M (months), or Y (years). You can 
+        combine several to get more resolution.
+    '''),
+    'restore': dedent('''
+        You restore a file or directory using:
+
+            ./dump restore src/verif/av/manpages/settings.py
+
+        Use manifest to determine what path you should specify to identify the 
+        desired file or directory.
+
+        You can restore the version of a file that existed on a particular date 
+        using:
+
+            ./dump --date 2015-04-01 restore src/verif/av/manpages/settings.py
+
+        Or, you can restore the version that existed 6 months ago using:
+
+            ./dump --date 6M restore src/verif/av/manpages/settings.py
+
+        Your restored files will be found in {RESTORE_DIR}.
+    '''),
+    'cleanup': dedent('''
+
+        You can clean up your remote repository using:
+
+            ./dump cleanup
+
+        This removes any unneeded files Duplicity created files in the remote 
+        repository.  This is not normally necessary, however it can be helpful 
+        if a previous session terminated abnormally.
+
+        If you also give a date, any backup sets that only contain files that 
+        are older than the given date are deleted:
+
+            ./dump -d 1Y cleanup
+
+        This can reduce the size of your remote repository. Of course after 
+        doing this you may not be able to restore files that were deleted before 
+        the date you specified.
+    '''),
+    'trouble': dedent('''
+        If Duplicity is refusing to work for you, run using the verbose flags:
+
+            ./dump -v -n backup full
+
+        Then carefully read the error messages. They should lead you to the 
+        problem.
+    '''),
+    'precautions': dedent('''
+        You should assure you have a backup copy of the GPG passphrase in a safe 
+        place.  This is very important. If the only copy of the GPG passphrase 
+        is on the disk being backed up, then if that disk were to fail you would 
+        not be able to access your backups.
+
+        If you keep the GPG passphrase in the dump file, you should set its 
+        permissions so that it is not readable by others:
+
+            chmod 700 dump
+
+        Better yet is to simply not store the passphrase in the dump script. 
+        This can be arranged if you are using `Abraxas 
+        <https://github.com/KenKundert/abraxas>`_, which is a flexible password 
+        management system. The interface to Abraxas is already built in to dump, 
+        but its use is optional (it need not be installed).
+
+        It is also best, if it can be arranged, to keep your backups at a remote 
+        site so that your backups do not get destroyed in the same disaster, 
+        such as a fire or flood, that claims your original files. If you do not 
+        have, or do not wish to use, your own server, Duplicity offers a number 
+        of backends that allow you to place your backups in the cloud 
+        (Rackspace, Dropbox, Amazon, Google, etc.).  Remember, your data is 
+        fully encrypted, so they cannot pry.
+    '''),
+}
+
 # Utility functions -- should not need to change anything below line {{{1
 # Configure expand() so it expands ~, $var, and {attr} as expected
 script_prefs(exit_upon_error=False, expanduser=True, expandvars=True)
@@ -130,7 +254,8 @@ def prefix(constant, members):
         yield member
 
 # handle errors
-def error(msg):
+def fail(msg):
+    msg = full_stop(msg)
     if NOTIFY:
         sh(['mail', '-s "dump: %s"' % msg, NOTIFY],
             stdin=dedent('''
@@ -140,26 +265,27 @@ def error(msg):
         )
     if NOTIFIER:
         sh(NOTIFIER.format(msg=msg))
-    sys.exit(fail('dump: ' + msg))
+    fatal(msg)
 
 # runDuplicity() {{{1
-def runDuplicity(name, cmd, narrate):
+def runDuplicity(name, cmd, narrating):
     try:
-        duplicity = Run(cmd, 's%sW' % ('oe' if narrate else 'OE'))
+        narrate('starting duplicity')
+        duplicity = Run(cmd, 's%sW' % ('oe' if narrating else 'OE'))
     except ScriptError as exception:
-        print(str(exception))
-        error('%s failed.' % name)
+        fail('%s failed: %s' % (name, str(exception)))
 
 # backup() {{{1
 def backup(level):
     if exists(lockfile):
-        error("backups skipped because a previous run has not yet completed.")
+        fail("backups skipped because a previous run has not yet completed")
     if MUST_EXIST and not exists(expand(MUST_EXIST)):
-        error(
-            "%s: does not exist, perform proper setup and restart." % MUST_EXIST
+        fail(
+            "%s: does not exist, perform proper setup and restart" % MUST_EXIST
         )
     try:
         for each in RUN_BEFORE_BACKUP:
+            narrate('running', each)
             sh(expand(each))
         if lockfile:
             with fopen(lockfile, 'w') as f:
@@ -176,11 +302,12 @@ def backup(level):
           + list(prefix('--exclude', expandAll(EXCLUDES)))
           + [srcDir, destination]
         )
-        runDuplicity('backup', cmd, narrate)
+        runDuplicity('backup', cmd, narrating)
         for each in RUN_AFTER_BACKUP:
+            narrate('running', each)
             sh(expand(each))
     except KeyboardInterrupt:
-        error('dump: killed at user request.')
+        fail('killed at user request')
     finally:
         if lockfile:
             rm(lockfile)
@@ -190,6 +317,7 @@ def restore(filelist, date):
     date = ['--time', date] if date else []
     mkdir(join(restoreDir))
     for each in filelist:
+        narrate('restoring %s.' % each)
         dest = join(restoreDir, tail(each))
         cmd = (
             [   'duplicity',
@@ -203,8 +331,8 @@ def restore(filelist, date):
           + date
           + [destination, dest]
         )
-        runDuplicity('restore', cmd, narrate)
-        print("%s: restored as: %s" % (each, dest))
+        runDuplicity('restore', cmd, narrating)
+        display("%s: restored as: %s" % (each, dest))
 
 # manifest() {{{1
 def manifest(date):
@@ -252,7 +380,7 @@ def cleanup(date):
       + expandAll(sftpCommand)
       + [destination]
     )
-    runDuplicity('cleanup', cmd, narrate)
+    runDuplicity('cleanup', cmd, narrating)
 
     # now remove backup sets that only contain old files
     if date:
@@ -267,7 +395,24 @@ def cleanup(date):
           + expandAll(sftpCommand)
           + [destination]
         )
-        runDuplicity('remove', cmd, narrate)
+        runDuplicity('remove', cmd, narrating)
+
+# help() {{{1
+def help(topic):
+    text = HELP_TOPICS.get(topic)
+    if text is None:
+        if topic:
+            display('%s: unknown topic.\n' % topic)
+        display(help_topics())
+    else:
+        display(text.format(**globals()))
+
+def help_topics():
+    indent = '    '
+    lines = ['Help topics include:'] + [
+        indent + t for t in sorted(HELP_TOPICS.keys())
+    ]
+    return '\n'.join(lines)
 
 # Setup {{{1
 # Color messages {{{2
@@ -304,19 +449,20 @@ try:
     destination = expand(protocol + '://{DEST_SERVER}/{destDir}')
 
     # Read command line {{{2
-    cmdline = docopt(__doc__)
+    cmdline = docopt(__doc__.format(topics=help_topics()))
     duplicityOptions += ['-v9'] if cmdline['--verbose'] else ['-v8']
     duplicityOptions += ['--dry-run'] if cmdline['--trial-run'] else []
-    narrate = cmdline['--narrate']
+    narrating = cmdline['--narrate']
+    Inform(narrate=narrating, logfile=True)
 
     # Get GPG passphrase {{{2
     if not GPG_PASSPHRASE:
         try:
             from abraxas import PasswordGenerator
         except ImportError:
-            error(', '.join([
+            fail(', '.join([
                 'abraxas is not available',
-                'you must specify passphrase in dump settings.'
+                'you must specify passphrase in dump settings'
             ]))
         pw = PasswordGenerator()
         pw.read_accounts()
@@ -335,9 +481,11 @@ try:
         verify(cmdline['--date'])
     elif cmdline['cleanup']:
         cleanup(cmdline['--date'])
+    elif cmdline['help']:
+        help(cmdline['<topic>'])
     sys.exit()
 
 except ScriptError as exception:
-    error(str(exception))
+    fail(str(exception))
 except KeyboardInterrupt:
-    error('dump: killed at user request')
+    fail('killed at user request')
