@@ -415,13 +415,6 @@ def help_topics():
     return '\n'.join(lines)
 
 # Setup {{{1
-# Color messages {{{2
-try:
-    from inform import Color
-    fail = Color('red', Color.isTTY(sys.stdout))
-except ImportError:
-    fail = lambda a: a
-
 # Process the settings {{{2
 try:
     destDir = expand(DEST_DIR)
