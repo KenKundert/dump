@@ -38,7 +38,8 @@ import os
 
 # Settings {{{1
 NAME = 'ken'                                    # descriptive name for the backups
-ABRAXAS_GPG_ACCOUNT = 'duplicity-kundert'       # abraxas account that holds passphrase for encryption key
+AVENDESORA_GPG_ACCOUNT = 'duplicity-kundert'    # abraxas account that holds passphrase for encryption key
+ABRAXAS_GPG_ACCOUNT = None                      # abraxas account that holds passphrase for encryption key
 GPG_PASSPHRASE = None                           # passphrase for encryption key; if specified, abraxas is not used
 SSH_IDENTITY = "~/.ssh/dumper"                  # ssh identify file (contains private key without passphrase)
 DEST_SERVER = "dumper"                          # remote host, or remote user and host (user@server)
@@ -450,17 +451,38 @@ try:
 
     # Get GPG passphrase {{{2
     if not GPG_PASSPHRASE:
-        try:
-            from abraxas import PasswordGenerator
-        except ImportError:
+        if ABRAXAS_GPG_ACCOUNT:
+            try:
+                from abraxas import PasswordGenerator
+            except ImportError:
+                fail(', '.join([
+                    'abraxas is not available',
+                    'you must specify passphrase in dump settings'
+                ]))
+            pw = PasswordGenerator()
+            pw.read_accounts()
+            acct = pw.get_account(ABRAXAS_GPG_ACCOUNT)
+            GPG_PASSPHRASE = pw.generate_password()
+
+        elif AVENDESORA_GPG_ACCOUNT:
+            try:
+                from avendesora import PasswordGenerator, PasswordError
+                pw = PasswordGenerator()
+                account = pw.get_account(AVENDESORA_GPG_ACCOUNT)
+                name = account.get_value('NAME')
+                GPG_PASSPHRASE = str(account.get_value('passcode'))
+            except PasswordError as err:
+                fail(err)
+            except ImportError:
+                fail(', '.join([
+                    'avendesora is not available',
+                    'you must specify passphrase in dump settings'
+                ]))
+        else:
             fail(', '.join([
-                'abraxas is not available',
                 'you must specify passphrase in dump settings'
             ]))
-        pw = PasswordGenerator()
-        pw.read_accounts()
-        acct = pw.get_account(ABRAXAS_GPG_ACCOUNT)
-        GPG_PASSPHRASE = pw.generate_password()
+
     os.environ['PASSPHRASE'] = GPG_PASSPHRASE
 
     # Run commands {{{1
