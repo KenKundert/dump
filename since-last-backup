@@ -9,41 +9,99 @@ Usage:
     since-last-backup [options]
 
 Options:
-    -u, --update               update the date of the last backup to now
-    -d <num>, --days <num>     emit message if this many days have passed
-    -m <msg>, --message <msg>  the message to emit
+    -u <lvl>, --update <lvl>     update the date of the last backup to now
+    -d <num>, --inc-days <num>   emit message if this many days have passed
+                                 since incremental backup
+    -D <num>, --full-days <num>  emit message if this many days have passed
+                                 since full backup
+    -m <msg>, --message <msg>    the message to emit
 
-Example:
-    since-last-backup -d3 -m "It has been {days:.1f} days since the last backup."
+If you specify --update, the appropriate date is updated and no further action 
+is taken (lvl should be either 'inc' or 'full').
+
+If you specify either --inc-days or --full-days or both, the message is printed 
+if the corresponding backup is overdue, otherwise nothing is printed. If both 
+durations are specified and both are violated, then two messages are printed.
+
+If you specify the message, the following replacements are available:
+    days: the number of days since the backup
+    elapsed: the time that has elapsed since the backup
+    kind: the type of backup, either 'incremental' or 'full'.
+
+Otherwise, the time that has elapsed since each backup is printed.
+
+Examples:
+    > since-last-backup
+    A incremental backup was performed 19 hours ago.
+    A full backup was performed 21 days ago.
+
+    > since-last-backup -d0.5 -m "It has been {days:.1f} days since the last {kind} backup."
+    It has been 0.8 days since the last incremental backup.
+
+    > since-last-backup -D90 -m "It has been {elapsed} since the last {kind} backup."
+    It has been 4 months since the last full backup.
 """
 from docopt import docopt
-import datetime
-import dateutil.parser
-import os
+from inform import fatal, os_error, output, done
+from pathlib import Path
+import arrow
 
-date_file = '~/.lastbackup'
+inc_date_file = Path('~/.lastbackup_inc').expanduser()
+full_date_file = Path('~/.lastbackup_full').expanduser()
 
 args = docopt(__doc__)
 
-if args['--update']:
-    with open(os.path.expanduser(date_file), 'w') as f:
-        f.write(datetime.datetime.today().isoformat())
-    exit()
+def gen_message(kind, date):
+    if args['--message']:
+        since_last_backup = arrow.now() - date
+        days = since_last_backup.total_seconds()/86400
+        elapsed = date.humanize(only_distance=True)
+        return args['--message'].format(days=days, kind=kind, elapsed=elapsed)
+    else:
+        return f'A {kind} backup was performed {date.humanize()}.'
 
-with open(os.path.expanduser(date_file), 'U') as f:
-    backup_date = dateutil.parser.parse(f.read())
+try:
+    # Write current time to file if this is an update
+    if args['--update']:
+        now = arrow.now()
+        inc_date_file.write_text(str(now))
+        if args['--update'] == 'full':
+            full_date_file.write_text(str(now))
+        done()
 
-now = datetime.datetime.today()
-delta = now - backup_date
-days = delta.total_seconds()/86400
+    # Get date of last incremental backup and warn user if it is overdue
+    try:
+        inc_backup_date = arrow.get(inc_date_file.read_text())
+    except FileNotFoundError:
+        inc_backup_date = arrow.get('19560105', 'YYYYMMDD')
+    except arrow.parser.ParserError:
+        fatal('date not given in iso format.', culprit=inc_date_file)
+    if args.get('--inc-days'):
+        since_last_backup = arrow.now() - inc_backup_date
+        days = since_last_backup.total_seconds()/86400
+        if days > float(args['--inc-days']):
+            output(gen_message('incremental', inc_backup_date))
 
-if args['--message']:
-    message = args['--message'].format(days=days)
-else:
-    message = "%.1f" % days
+    # Get date of last full backup and warn user if it is overdue
+    try:
+        full_backup_date = arrow.get(full_date_file.read_text())
+    except FileNotFoundError:
+        full_backup_date = arrow.get('19560105', 'YYYYMMDD')
+    except arrow.parser.ParserError:
+        fatal('date not given in iso format.', culprit=full_date_file)
+    if args.get('--full-days'):
+        since_last_backup = arrow.now() - full_backup_date
+        days = since_last_backup.total_seconds()/86400
+        if days > float(args['--full-days']):
+            output(gen_message('full', full_backup_date))
 
-if args['--days']:
-    thresh = float(args['--days'])
-    if days < thresh:
-        exit()
-print(message)
+    # Don't print a message if limits were imposed and backups are not overdye
+    if args.get('--inc-days') or args.get('--full-days'):
+        done()
+
+    # Otherwise, simply report age of backups
+    output(gen_message('full', full_backup_date))
+    output(gen_message('incremental', inc_backup_date))
+
+except OSError as e:
+    fatal(os_error(e))

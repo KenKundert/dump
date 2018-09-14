@@ -25,7 +25,7 @@ If needed, date is given in one of the following forms:
 
 # Imports {{{1
 from docopt import docopt
-from inform import display, fatal, full_stop, Inform, narrate
+from inform import display, fatal, full_stop, Inform, narrate, log
 from scripts import (
     abspath, cwd, fopen, exists, head, isexecutable, join, mkdir, rm, Run,
     script_prefs, ScriptError, sh, split, tail
@@ -91,7 +91,7 @@ RUN_BEFORE_BACKUP = [
         # remove the detritus before backing up
 ]
 RUN_AFTER_BACKUP = [
-    "./since-last-backup -u",
+    "./since-last-backup --update={level}",
         # update the time of last successful backup in ~/.lastbackup
 ]
 
@@ -237,8 +237,12 @@ installDir = abspath(head(__file__))
 variables = locals()
 
 # expand {attr} constructs in a string recursively, then expand ~ and $VAR
-def expand(name):
-    new = name.format(**variables)
+def expand(name, extra=None):
+    args = {}
+    args.update(variables)
+    if extra:
+        args.update(extra)
+    new = name.format(**args)
     if new == name:
         return join(new) # join() is used to expand ~ and $VAR
     else:
@@ -272,6 +276,7 @@ def fail(msg):
 def runDuplicity(name, cmd, narrating):
     try:
         narrate('starting duplicity')
+        log('running:', *cmd)
         duplicity = Run(cmd, 's%sW' % ('oe' if narrating else 'OE'))
     except ScriptError as exception:
         fail('%s failed: %s' % (name, str(exception)))
@@ -306,7 +311,7 @@ def backup(level):
         runDuplicity('backup', cmd, narrating)
         for each in RUN_AFTER_BACKUP:
             narrate('running', each)
-            sh(expand(each))
+            sh(expand(each, extra=dict(level=level)))
     except KeyboardInterrupt:
         fail('killed at user request')
     finally:
